@@ -266,7 +266,7 @@ class Boss(commands.GroupCog):
             )
             return
 
-        if await BattleBallRestriction.filter(ball=countryball).exists():
+        if not countryball.countryball.enabled or await BattleBallRestriction.filter(ball=countryball).exists():
             await interaction.followup.send(
                 f"This {settings.collectible_name} isn't allowed in battle mode.",
                 ephemeral=True,

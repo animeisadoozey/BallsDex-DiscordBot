@@ -25,6 +25,8 @@ from ballsdex.core.utils.sorting import FilteringChoices, SortingChoices, filter
 from ballsdex.core.utils.transformers import (
     BallEnabledTransform,
     BallInstanceTransform,
+    EconomyTransform,
+    RegimeTransform,
     SpecialEnabledTransform,
     TradeCommandType,
 )
@@ -132,6 +134,8 @@ class Balls(commands.GroupCog, group_name=settings.players_group_cog_name):
         reverse: bool = False,
         countryball: BallEnabledTransform | None = None,
         special: SpecialEnabledTransform | None = None,
+        regime: RegimeTransform | None = None,
+        economy: EconomyTransform | None = None,
         filter: FilteringChoices | None = None,
     ):
         """
@@ -149,6 +153,10 @@ class Balls(commands.GroupCog, group_name=settings.players_group_cog_name):
             Filter the list by a specific countryball.
         special: Special
             Filter the list by a specific special event.
+        regime: Regime
+            Filter the list by a specific regime.
+        economy: Economy
+            Filter the list by a specific economy.
         filter: FilteringChoices
             Filter the list by a specific filter.
         """
@@ -190,6 +198,10 @@ class Balls(commands.GroupCog, group_name=settings.players_group_cog_name):
             query = filter_balls(filter, query, interaction.guild_id)
         if countryball:
             query = query.filter(ball=countryball)
+        if regime:
+            query = query.filter(ball__regime=regime)
+        if economy:
+            query = query.filter(ball__economy=economy)
         if special:
             query = query.filter(special=special)
         if sort:

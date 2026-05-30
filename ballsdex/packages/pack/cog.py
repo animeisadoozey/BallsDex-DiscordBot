@@ -1,9 +1,6 @@
-import os
 import random
-import tomllib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import discord
@@ -14,7 +11,7 @@ from tortoise.timezone import get_default_timezone
 from tortoise.timezone import now as tortoise_now
 
 from ballsdex.core.models import Ball, BallInstance, Special, Player, specials
-from ballsdex.core.pack_models import PackResource
+from ballsdex.core.pack_models import PackResource, PackSettings
 from ballsdex.core.currency_models import CurrencySettings, Item as ItemModel, MoneyInstance
 from ballsdex.packages.admin.cog import Pages
 from ballsdex.settings import settings
@@ -25,35 +22,30 @@ from .transformers import ItemTransform
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-class PackageSettings:
-    """
-    Settings for the Pack package.
-    """
-    def __init__(self, path):
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-        
-        if data is None:
-            return
-
-        daily = data.get("daily", {})
-        weekly = data.get("weekly", {})
-        
-        self.min_rarity_daily: float | None = daily.get("min_rarity_daily", None)
-        self.max_rarity_daily: float | None = daily.get("max_rarity_daily", None)
-
-        self.min_rarity_weekly: float | None = weekly.get("min_rarity_weekly", None)
-        self.max_rarity_weekly: float | None = weekly.get("max_rarity_weekly", None)
-
-pack_settings = PackageSettings(Path(os.path.dirname(os.path.abspath(__file__)), "./config.toml"))
-
 class Pack(commands.GroupCog):
     """
     Claim a daily/weekly pack!
     """
     
-    def __init__(self, bot: "BallsDexBot") -> None:
+    def __init__(self, bot: "BallsDexBot", settings: "PackSettings") -> None:
         self.bot = bot
+        self.settings = settings
+
+    @commands.group()
+    async def pack(self, ctx: commands.Context["BallsDexBot"]):
+        """
+        Pack Prefix Commands.
+        """
+        pass
+
+    @pack.command()
+    @commands.is_owner()
+    async def reloadconf(self, ctx: commands.Context["BallsDexBot"]):
+        """
+        Reload Pack Settings.
+        """
+        await self.settings.refresh_from_db()
+        await ctx.message.add_reaction("✅")
 
     @app_commands.command(name="daily")
     async def daily(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -69,7 +61,7 @@ class Pack(commands.GroupCog):
                 ephemeral=True
             )
             return
-        if not pack_settings.min_rarity_daily or not pack_settings.max_rarity_daily:
+        if self.settings.min_rarity_daily is None or self.settings.max_rarity_daily is None:
             await interaction.response.send_message(
                 "Daily packs are not configured. Contact support if this persists.",
                 ephemeral=True
@@ -86,7 +78,7 @@ class Pack(commands.GroupCog):
         balls = await Ball.filter(
             enabled=True,
             tradeable=True,
-            rarity__range=(pack_settings.min_rarity_daily, pack_settings.max_rarity_daily)
+            rarity__range=(self.settings.min_rarity_daily, self.settings.max_rarity_daily)
         )
         ball = await self._get_random_countryball(balls)
         rarity = ball.rarity
@@ -130,7 +122,7 @@ class Pack(commands.GroupCog):
                 ephemeral=True
             )
             return
-        if not pack_settings.min_rarity_weekly or not pack_settings.max_rarity_weekly:
+        if self.settings.min_rarity_weekly is None or self.settings.max_rarity_weekly is None:
             await interaction.response.send_message(
                 "Weekly packs are not configured. Contact support if this persists.",
                 ephemeral=True
@@ -147,7 +139,7 @@ class Pack(commands.GroupCog):
         balls = await Ball.filter(
             enabled=True,
             tradeable=True,
-            rarity__range=(pack_settings.min_rarity_weekly, pack_settings.max_rarity_weekly)
+            rarity__range=(self.settings.min_rarity_weekly, self.settings.max_rarity_weekly)
         )
         ball = await self._get_random_countryball(balls)
         rarity = ball.rarity

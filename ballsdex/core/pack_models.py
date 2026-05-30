@@ -43,3 +43,23 @@ class PackResource(models.Model):
         await self.refresh_from_db(fields=("weekly_cooldown",))
         self.weekly_cooldown
         return self.weekly_cooldown is not None and (self.weekly_cooldown + timedelta(weeks=1)) > timezone.now()
+
+
+class PackSettings(models.Model):
+    min_rarity_daily = fields.FloatField(description="Lowest rarity that can appear in daily packs.")
+    max_rarity_daily = fields.FloatField(description="Highest rarity that can appear in daily packs.")
+    min_rarity_weekly = fields.FloatField(description="Lowest rarity that can appear in weekly packs.")
+    max_rarity_weekly = fields.FloatField(description="Highest rarity that can appear in weekly packs.")
+
+    @classmethod
+    async def load(cls):
+        obj, _ = await cls.get_or_create(
+            pk=1,
+            defaults={
+                "min_rarity_daily": 50.0,
+                "max_rarity_daily": 100.0,
+                "min_rarity_weekly": 1.0,
+                "max_rarity_weekly": 50.0,
+            }
+        )
+        return obj

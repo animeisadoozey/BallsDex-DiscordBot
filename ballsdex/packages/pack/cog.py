@@ -1,58 +1,51 @@
-import os
 import random
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import discord
-import tomllib
-from ballsdex.core.currency_models import CurrencySettings, MoneyInstance
-from ballsdex.core.currency_models import Item as ItemModel
-from ballsdex.core.models import Ball, BallInstance, Player, Special, specials
-from ballsdex.core.pack_models import PackResource
-from ballsdex.packages.admin.cog import FieldPageSource, Pages
-from ballsdex.settings import settings
 from discord import app_commands
 from discord.ext import commands
 from discord.utils import format_dt
 from tortoise.timezone import get_default_timezone
 from tortoise.timezone import now as tortoise_now
 
+from ballsdex.core.models import Ball, BallInstance, Special, Player, specials
+from ballsdex.core.pack_models import PackResource, PackSettings
+from ballsdex.core.currency_models import CurrencySettings, Item as ItemModel, MoneyInstance
+from ballsdex.packages.admin.cog import Pages
+from ballsdex.settings import settings
+
+from .components import ShopMenuSource
 from .transformers import ItemTransform
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
-class PackageSettings:
-    """
-    Settings for the Pack package.
-    """
-    def __init__(self, path):
-        with open(path, "rb") as f:
-            data = tomllib.load(f)
-
-        if data is None:
-            return
-
-        daily = data.get("daily", {})
-        weekly = data.get("weekly", {})
-
-        self.min_rarity_daily: float | None = daily.get("min_rarity_daily", None)
-        self.max_rarity_daily: float | None = daily.get("max_rarity_daily", None)
-
-        self.min_rarity_weekly: float | None = weekly.get("min_rarity_weekly", None)
-        self.max_rarity_weekly: float | None = weekly.get("max_rarity_weekly", None)
-
-pack_settings = PackageSettings(Path(os.path.dirname(os.path.abspath(__file__)), "./config.toml"))
-
 class Pack(commands.GroupCog):
     """
     Claim a daily/weekly pack!
     """
-
-    def __init__(self, bot: "BallsDexBot") -> None:
+    
+    def __init__(self, bot: "BallsDexBot", settings: "PackSettings") -> None:
         self.bot = bot
+        self.settings = settings
+
+    @commands.group()
+    async def pack(self, ctx: commands.Context["BallsDexBot"]):
+        """
+        Pack Prefix Commands.
+        """
+        pass
+
+    @pack.command()
+    @commands.is_owner()
+    async def reloadconf(self, ctx: commands.Context["BallsDexBot"]):
+        """
+        Reload Pack Settings.
+        """
+        await self.settings.refresh_from_db()
+        await ctx.message.add_reaction("✅")
 
     @app_commands.command(name="daily")
     async def daily(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -68,7 +61,7 @@ class Pack(commands.GroupCog):
                 ephemeral=True
             )
             return
-        if not pack_settings.min_rarity_daily or not pack_settings.max_rarity_daily:
+        if self.settings.min_rarity_daily is None or self.settings.max_rarity_daily is None:
             await interaction.response.send_message(
                 "Daily packs are not configured. Contact support if this persists.",
                 ephemeral=True
@@ -77,15 +70,15 @@ class Pack(commands.GroupCog):
 
         if resource.daily_cooldown is not None:
             await resource.remove_daily_cooldown()
-        resource.uses += 1
-        await resource.save(update_fields=("uses",))
-        if resource.uses >= 3:
+        if resource.daily_uses + 1 >= 3:
             await resource.set_daily_cooldown()
+        resource.daily_uses += 1
+        await resource.save(update_fields=("daily_uses",))
         await interaction.response.defer()
         balls = await Ball.filter(
             enabled=True,
             tradeable=True,
-            rarity__range=(pack_settings.min_rarity_daily, pack_settings.max_rarity_daily)
+            rarity__range=(self.settings.min_rarity_daily, self.settings.max_rarity_daily)
         )
         ball = await self._get_random_countryball(balls)
         rarity = ball.rarity
@@ -104,9 +97,9 @@ class Pack(commands.GroupCog):
         embed.description = desc
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
         footer_text = (
-            f"Uses: {resource.uses}/3. Come back tomorrow."
-            if resource.uses >= 3
-            else f"Uses: {resource.uses}/3."
+            f"Uses: {resource.daily_uses}/3. Come back tomorrow." 
+            if resource.daily_uses >= 3 
+            else f"Uses: {resource.daily_uses}/3."
         )
         embed.set_footer(text=footer_text)
         with ThreadPoolExecutor() as pool:
@@ -114,7 +107,7 @@ class Pack(commands.GroupCog):
         file = discord.File(buffer, "card.webp")
         embed.set_image(url="attachment://card.webp")
         await interaction.followup.send(embed=embed, file=file)
-
+    
     @app_commands.command(name="weekly")
     async def weekly(self, interaction: discord.Interaction["BallsDexBot"]):
         """
@@ -129,7 +122,7 @@ class Pack(commands.GroupCog):
                 ephemeral=True
             )
             return
-        if not pack_settings.min_rarity_weekly or not pack_settings.max_rarity_weekly:
+        if self.settings.min_rarity_weekly is None or self.settings.max_rarity_weekly is None:
             await interaction.response.send_message(
                 "Weekly packs are not configured. Contact support if this persists.",
                 ephemeral=True
@@ -138,15 +131,15 @@ class Pack(commands.GroupCog):
 
         if resource.weekly_cooldown is not None:
             await resource.remove_weekly_cooldown()
-        resource.uses += 1
-        await resource.save(update_fields=("uses",))
-        if resource.uses >= 3:
+        if resource.weekly_uses + 1 >= 1:
             await resource.set_weekly_cooldown()
+        resource.weekly_uses += 1
+        await resource.save(update_fields=("weekly_uses",))
         await interaction.response.defer()
         balls = await Ball.filter(
             enabled=True,
             tradeable=True,
-            rarity__range=(pack_settings.min_rarity_weekly, pack_settings.max_rarity_weekly)
+            rarity__range=(self.settings.min_rarity_weekly, self.settings.max_rarity_weekly)
         )
         ball = await self._get_random_countryball(balls)
         rarity = ball.rarity
@@ -178,53 +171,16 @@ class Pack(commands.GroupCog):
         """
         await interaction.response.defer(thinking=True)
         currency_settings = await CurrencySettings.load()
-        currency_emoji = (
-            self.bot.get_emoji(currency_settings.emoji_id)
-            if currency_settings.emoji_id
-            else ""
-        )
-        packs = await ItemModel.all().order_by("prize").prefetch_related("special")
+        packs = await ItemModel.all().order_by("prize").prefetch_related("balls", "special")
 
         if not packs:
             await interaction.followup.send(f"{settings.bot_name} doesn't have any packs to buy.")
             return
-
-        entries: list[tuple[str, str]] = []
-        for pack in packs:
-            if pack.emoji_id:
-                emoji = str(self.bot.get_emoji(pack.emoji_id))
-            else:
-                emoji = ""
-
-            if pack.description:
-                description = (
-                    f"{pack.description}\n\n"
-                    f"Price: **{currency_emoji} {pack.prize:,} {currency_settings.display_name(pack.prize)}**\n"
-                    f"Minimum Rarity: **{pack.minimum_rarity}**\n"
-                    f"Maximum Rarity: **{pack.maximum_rarity}**\n"
-                    f"Special: **{pack.special.name if pack.special else 'Any'}**\n"
-                )
-            else:
-                description = (
-                    f"Price: **{currency_emoji} {pack.prize:,} {currency_settings.display_name(pack.prize)}**\n"
-                    f"Minimum Rarity: **{pack.minimum_rarity}**\n"
-                    f"Maximum Rarity: **{pack.maximum_rarity}**\n"
-                    f"Special: **{pack.special.name if pack.special else 'Any'}**\n"
-                )
-
-            entries.append(
-                (
-                    f"{emoji} {pack.name}",
-                    description
-                )
-            )
-
-        source = FieldPageSource(entries, per_page=5)
-        source.embed.title = "Available Packs"
-
+        
+        source = ShopMenuSource(packs, self.bot, currency_settings)
         pages = Pages(source, interaction=interaction, compact=True)
         await pages.start()
-
+    
     @app_commands.command()
     async def buy(
         self, interaction: discord.Interaction["BallsDexBot"], pack: ItemTransform
@@ -239,16 +195,15 @@ class Pack(commands.GroupCog):
         """
         await interaction.response.defer(thinking=True, ephemeral=True)
         currency_settings = await CurrencySettings.load()
-        await pack.fetch_related("special")
         player, _ = await Player.get_or_create(discord_id=interaction.user.id)
         instance, _ = await MoneyInstance.get_or_create(player=player)
+        currency_emoji = (
+            self.bot.get_emoji(currency_settings.emoji_id) 
+            if currency_settings.emoji_id 
+            else ""
+        )
         if instance.amount < pack.prize:
             emoji = self.bot.get_emoji(pack.emoji_id) if pack.emoji_id else ""
-            currency_emoji = (
-                self.bot.get_emoji(currency_settings.emoji_id)
-                if currency_settings.emoji_id
-                else ""
-            )
             await interaction.followup.send(
                 f"You don't enough {currency_emoji} {currency_settings.name} to buy "
                 f"**{emoji} {pack.name}**\n"
@@ -256,17 +211,21 @@ class Pack(commands.GroupCog):
                 f"**{currency_emoji} {instance.amount:,} {currency_settings.display_name(instance.amount)}**"
             )
             return
-
+        
         instance.amount -= pack.prize
         await instance.save(update_fields=("amount",))
 
-        balls = await Ball.filter(
-            enabled=True,
-            tradeable=True,
-            rarity__range=(pack.minimum_rarity, pack.maximum_rarity)
-        )
+        balls = await pack.balls.all()
+        if balls:
+            ball = random.choice([x.cached_ball for x in balls])
+        else:
+            balls = await Ball.filter(
+                enabled=True,
+                tradeable=True,
+                rarity__range=(pack.minimum_rarity, pack.maximum_rarity)
+            )
+            ball = await self._get_random_countryball(balls)
         special = pack.special or self.get_random_special()
-        ball = await self._get_random_countryball(balls)
         rarity = ball.rarity
         instance = await BallInstance.create(
             player=player,
@@ -300,8 +259,8 @@ class Pack(commands.GroupCog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         currency_settings = await CurrencySettings.load()
         currency_emoji = (
-            self.bot.get_emoji(currency_settings.emoji_id)
-            if currency_settings.emoji_id
+            self.bot.get_emoji(currency_settings.emoji_id) 
+            if currency_settings.emoji_id 
             else ""
         )
         player, _ = await Player.get_or_create(discord_id=interaction.user.id)
@@ -315,7 +274,7 @@ class Pack(commands.GroupCog):
             f"**{currency_emoji} 1,500 {currency_settings.display_name(1500)}**! "
             f"Now you have **{instance.amount:,}**. Come back tomorrow!"
         )
-
+    
     @app_commands.command()
     async def coin_balance(self, interaction: discord.Interaction["BallsDexBot"]):
         """
@@ -324,8 +283,8 @@ class Pack(commands.GroupCog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         currency_settings = await CurrencySettings.load()
         currency_emoji = (
-            self.bot.get_emoji(currency_settings.emoji_id)
-            if currency_settings.emoji_id
+            self.bot.get_emoji(currency_settings.emoji_id) 
+            if currency_settings.emoji_id 
             else ""
         )
         player, _ = await Player.get_or_create(discord_id=interaction.user.id)

@@ -28,6 +28,9 @@ async def drop(interaction: discord.Interaction["BallsDexBot"], countryball: Bal
     if not isinstance(channel, discord.TextChannel):
         await interaction.response.send_message("This channel isn't a text channel.", ephemeral=True)
         return
+    if not countryball.countryball.tradeable:
+        await interaction.response.send_message("The countryball must be tradeable.", ephemeral=True)
+        return
     await interaction.response.defer(thinking=True, ephemeral=True)
     description = countryball.description(include_emoji=True, bot=interaction.client)
     view = ConfirmChoiceView(

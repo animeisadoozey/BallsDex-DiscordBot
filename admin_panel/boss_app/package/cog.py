@@ -55,6 +55,7 @@ class Boss(commands.GroupCog):
         ]
         self.bot.tree.add_command(self.admin, guilds=guilds)
         if self.app_command:
+            self.bot.tree.remove_command(self.app_command.name)
             self.bot.tree.add_command(self.app_command, guilds=guilds)
 
     @commands.group()

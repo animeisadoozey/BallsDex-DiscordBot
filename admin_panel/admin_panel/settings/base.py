@@ -57,6 +57,11 @@ INSTALLED_APPS = [
     "bd_models",
     "preview",
     "settings",
+    "battle_app",
+    "boss_app",
+    "currency_app",
+    "merchant_app",
+    "pack_models",
     "media_management",
 ]
 

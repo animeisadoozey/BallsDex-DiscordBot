@@ -536,6 +536,12 @@ class Balls(commands.GroupCog, group_name=settings.balls_slash_name):
         if not countryball:
             return
 
+        if not countryball.is_tradeable:
+            await interaction.response.send_message(
+                f"You cannot drop this {settings.collectible_name}.", ephemeral=True
+            )
+            return
+
         config = await GuildConfig.objects.aget_or_none(guild_id=interaction.guild_id)
         if config and not config.manual_drop_enabled:
             await interaction.response.send_message(
@@ -546,12 +552,6 @@ class Balls(commands.GroupCog, group_name=settings.balls_slash_name):
         cog = cast("CountryBallsSpawner | None", self.bot.get_cog("CountryBallsSpawner"))
         if not cog:
             await interaction.response.send_message("The cog `CountryBallsSpawner` isn't loaded.", ephemeral=True)
-            return
-
-        if not countryball.is_tradeable:
-            await interaction.response.send_message(
-                f"You cannot drop this {settings.collectible_name}.", ephemeral=True
-            )
             return
 
         if await countryball.is_locked():

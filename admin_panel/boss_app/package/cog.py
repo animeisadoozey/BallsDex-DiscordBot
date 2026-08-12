@@ -54,10 +54,10 @@ class Boss(commands.GroupCog):
             )
         ]
         self.bot.tree.remove_command(self.admin.name)
-        self.bot.tree.add_command(self.admin, guilds=guilds)
+        self.bot.tree.add_command(self.admin, guilds=guilds, override=True)
         if self.app_command:
             self.bot.tree.remove_command(self.app_command.name)
-            self.bot.tree.add_command(self.app_command, guilds=guilds)
+            self.bot.tree.add_command(self.app_command, guilds=guilds, override=True)
 
     @commands.group()
     async def boss(self, ctx: commands.Context["BallsDexBot"]):

@@ -78,7 +78,7 @@ class BossGame:
         self.task: asyncio.Task | None = None
         self.players: dict[int, BossGamePlayer] = {}
         self.view: "JoinGameView"
-        self.pick_time: bool = False
+        self.pick_time: bool = True
 
     def get_boss_image(self, type: Literal["start", "attack", "defense"]) -> discord.File:
         image: str

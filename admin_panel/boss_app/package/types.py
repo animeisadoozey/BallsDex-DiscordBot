@@ -33,7 +33,9 @@ class BossGamePlayer:
     def __init__(self, boss: BossBall, boss_player: BossPlayer, instance: BossGameBall | None = None):
         self.boss = boss
         self.boss_player = boss_player
-        self.instance = instance
+        self.current_instance = instance
+        self.instances: list[BallInstance] = []
+        self.picked = False
         self.damage = 0
         self.dead = False
         self.won = False
@@ -53,8 +55,8 @@ class BossGamePlayer:
             self.boss_player.kills += 1
         await self.boss_player.asave()
         history = BossHistory(boss=self.boss, player=self.boss_player, damage=self.damage, dead=self.dead, won=self.won)
-        if self.instance:
-            history.ball_instance = self.instance.instance
+        if self.current_instance:
+            history.ball_instance = self.current_instance.instance
         return history
 
 
@@ -76,6 +78,7 @@ class BossGame:
         self.task: asyncio.Task | None = None
         self.players: dict[int, BossGamePlayer] = {}
         self.view: "JoinGameView"
+        self.pick_time: bool = False
 
     def get_boss_image(self, type: Literal["start", "attack", "defense"]) -> discord.File:
         image: str
@@ -115,7 +118,7 @@ class BossGame:
                     "attack" if self.type == BossGameType.last_man_standing else random.choice(["attack", "defense"])
                 )
 
-                end_time = datetime.datetime.now() + datetime.timedelta(seconds=10)
+                end_time = datetime.datetime.now() + datetime.timedelta(seconds=30)
                 if action == "attack":
                     await channel.send(
                         content=(
@@ -134,15 +137,16 @@ class BossGame:
                         ),
                         file=self.get_boss_image("defense"),
                     )
-                await asyncio.sleep(10)
+                await asyncio.sleep(30)
+                self.pick_time = False
 
                 if action == "defense":
                     global_damage_count = 0
                     log_info = ""
                     histories: list[BossHistory] = []
                     for player in self.get_players():
-                        instance = player.instance
-                        if not instance:
+                        instance = player.current_instance
+                        if not instance or not player.picked:
                             player.dead = True
                             histories.append(await player.save())
                             log_info += (
@@ -180,7 +184,8 @@ class BossGame:
                     dead_players: list[BossHistory] = []
                     global_deads = ""
                     for boss_player in self.get_players():
-                        if not boss_player.instance:
+                        instance = boss_player.current_instance
+                        if not instance or not boss_player.picked:
                             boss_player.dead = True
                             dead_players.append(await boss_player.save())
                             global_deads += (
@@ -190,9 +195,8 @@ class BossGame:
                             continue
 
                         damage = random.randint(self.attack // 2, self.attack)
-                        final_damage = min(damage, boss_player.instance.health)
-                        boss_player.instance.health -= final_damage
-                        if boss_player.instance.health <= 0:
+                        final_damage = min(damage, instance.health)
+                        if instance.health <= damage:
                             boss_player.dead = True
                             dead_players.append(await boss_player.save())
                             global_deads += f"{boss_player.boss_player.name} has died!\n"
@@ -226,7 +230,10 @@ class BossGame:
                         await asyncio.sleep(5)
                         break
 
+                for player in self.players.values():
+                    player.picked = False
                 await asyncio.sleep(5)
+                self.pick_time = True
                 round += 1
 
             if self.type == BossGameType.last_hit:

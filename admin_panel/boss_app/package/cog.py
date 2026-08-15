@@ -193,10 +193,10 @@ class Boss(commands.GroupCog):
             return
         embed = discord.Embed(title=f"{player.boss_player.name}'s stats", color=discord.Color.blurple())
         description = f"**Damage:** {player.damage}\n**Dead:** {'Yes' if player.dead else 'No'}\n"
-        if player.instance:
+        if player.current_instance:
             description += (
                 f"**{settings.collectible_name.title()}:** "
-                f"{player.instance.instance.description(bot=self.bot, include_emoji=True, short=True)}"
+                f"{player.current_instance.instance.description(bot=self.bot, include_emoji=True, short=True)}"
             )
         embed.description = description
         await interaction.response.send_message(embed=embed, ephemeral=True)
@@ -251,11 +251,17 @@ class Boss(commands.GroupCog):
         game = self.active_bosses[interaction.guild_id]
         player = game.get_player(interaction.user.id)
 
+        if not game.pick_time:
+            await interaction.response.send_message(
+                f"It's not the time to select a {settings.collectible_name}", ephemeral=True
+            )
+            return
+
         if not player:
             await interaction.response.send_message("You aren't in the boss game or you have died.", ephemeral=True)
             return
 
-        if player.instance:
+        if player.picked:
             await interaction.response.send_message(
                 f"You have selected an {settings.collectible_name}.", ephemeral=True
             )
@@ -272,6 +278,12 @@ class Boss(commands.GroupCog):
         if not countryball.countryball.enabled or restricted:
             await interaction.followup.send(
                 f"This {settings.collectible_name} isn't allowed in battle mode.", ephemeral=True
+            )
+            return
+
+        if any(x.pk == countryball.pk for x in player.instances):
+            await interaction.response.send_message(
+                f"You've already selected this {settings.collectible_name} before.", ephemeral=True
             )
             return
 
@@ -301,7 +313,8 @@ class Boss(commands.GroupCog):
             if buff:
                 boss_ball.health += buff.health
                 boss_ball.attack += buff.attack
-        player.instance = boss_ball
+        player.current_instance = boss_ball
+        player.instances.append(boss_ball.instance)
         await interaction.followup.send(f"{settings.collectible_name.title()} selected.", ephemeral=True)
         return
 

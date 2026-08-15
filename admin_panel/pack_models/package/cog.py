@@ -198,7 +198,6 @@ class Pack(commands.GroupCog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         currency_settings = await CurrencySettings.aload()
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        instance, _ = await MoneyInstance.objects.aget_or_create(player=player)
         currency_emoji = self.bot.get_emoji(currency_settings.emoji_id) if currency_settings.emoji_id else ""
 
         balls = [x async for x in pack.balls.all()]
@@ -237,6 +236,8 @@ class Pack(commands.GroupCog):
             await interaction.followup.send(embed=embed)
             return
         else:
+            instance, _ = await MoneyInstance.objects.aget_or_create(player=player)
+
             if pack.prize:
                 if instance.amount < pack.prize:
                     emoji = self.bot.get_emoji(pack.emoji_id) if pack.emoji_id else ""

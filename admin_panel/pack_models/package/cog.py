@@ -70,10 +70,6 @@ class Pack(commands.GroupCog):
 
         if resource.daily_cooldown is not None:
             await resource.remove_daily_cooldown()
-        if resource.daily_uses + 1 >= 3:
-            await resource.set_daily_cooldown()
-        resource.daily_uses += 1
-        await resource.asave(update_fields=("daily_uses",))
         await interaction.response.defer()
         balls = [
             x
@@ -101,11 +97,19 @@ class Pack(commands.GroupCog):
             else f"Uses: {resource.daily_uses}/3."
         )
         embed.set_footer(text=footer_text)
-        with ThreadPoolExecutor() as pool:
-            buffer = await interaction.client.loop.run_in_executor(pool, instance.draw_card)
-        file = discord.File(buffer, "card.webp")
-        embed.set_image(url="attachment://card.webp")
-        await interaction.followup.send(embed=embed, file=file)
+        try:
+            with ThreadPoolExecutor() as pool:
+                buffer = await interaction.client.loop.run_in_executor(pool, instance.draw_card)
+            file = discord.File(buffer, "card.webp")
+            embed.set_image(url="attachment://card.webp")
+            await interaction.followup.send(embed=embed, file=file)
+        except OSError:
+            await interaction.followup.send(embed=embed)
+        else:
+            resource.daily_uses += 1
+            if resource.daily_uses >= 3:
+                await resource.set_daily_cooldown()
+            await resource.asave(update_fields=("daily_uses",))
 
     @app_commands.command(name="weekly")
     async def weekly(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -129,10 +133,6 @@ class Pack(commands.GroupCog):
 
         if resource.weekly_cooldown is not None:
             await resource.remove_weekly_cooldown()
-        if resource.weekly_uses + 1 >= 1:
-            await resource.set_weekly_cooldown()
-        resource.weekly_uses += 1
-        await resource.asave(update_fields=("weekly_uses",))
         await interaction.response.defer()
         balls = [
             x
@@ -155,11 +155,18 @@ class Pack(commands.GroupCog):
         embed.description = desc
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
         embed.set_footer(text="Come back next week for another pack!")
-        with ThreadPoolExecutor() as pool:
-            buffer = await interaction.client.loop.run_in_executor(pool, instance.draw_card)
-        file = discord.File(buffer, "card.webp")
-        embed.set_image(url="attachment://card.webp")
-        await interaction.followup.send(embed=embed, file=file)
+        try:
+            with ThreadPoolExecutor() as pool:
+                buffer = await interaction.client.loop.run_in_executor(pool, instance.draw_card)
+            file = discord.File(buffer, "card.webp")
+            embed.set_image(url="attachment://card.webp")
+            await interaction.followup.send(embed=embed, file=file)
+        except OSError:
+            await interaction.followup.send(embed=embed)
+        else:
+            resource.weekly_uses += 1
+            await resource.set_weekly_cooldown()
+            await resource.asave(update_fields=("weekly_uses",))
 
     @app_commands.command()
     async def shop(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -193,19 +200,6 @@ class Pack(commands.GroupCog):
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         instance, _ = await MoneyInstance.objects.aget_or_create(player=player)
         currency_emoji = self.bot.get_emoji(currency_settings.emoji_id) if currency_settings.emoji_id else ""
-        if pack.prize:
-            if instance.amount < pack.prize:
-                emoji = self.bot.get_emoji(pack.emoji_id) if pack.emoji_id else ""
-                await interaction.followup.send(
-                    f"You don't enough {currency_emoji} {currency_settings.name} to buy "
-                    f"**{emoji} {pack.name}**\n"
-                    f"Your actual balance: "
-                    f"**{currency_emoji} {instance.amount:,} {currency_settings.display_name(instance.amount)}**"
-                )
-                return
-
-            instance.amount -= pack.prize
-            await instance.asave(update_fields=("amount",))
 
         balls = [x async for x in pack.balls.all()]
         if balls:
@@ -233,11 +227,29 @@ class Pack(commands.GroupCog):
             desc += f"⚡ **Special:** {special.name}\n"
         embed.description = desc
         embed.set_author(name=interaction.user.display_name, icon_url=interaction.user.display_avatar.url)
-        with ThreadPoolExecutor() as pool:
-            buffer = await interaction.client.loop.run_in_executor(pool, instance.draw_card)
-        file = discord.File(buffer, "card.webp")
-        embed.set_image(url="attachment://card.webp")
-        await interaction.followup.send(embed=embed, file=file)
+        try:
+            with ThreadPoolExecutor() as pool:
+                buffer = await interaction.client.loop.run_in_executor(pool, instance.draw_card)
+            file = discord.File(buffer, "card.webp")
+            embed.set_image(url="attachment://card.webp")
+            await interaction.followup.send(embed=embed, file=file)
+        except OSError:
+            await interaction.followup.send(embed=embed)
+            return
+        else:
+            if pack.prize:
+                if instance.amount < pack.prize:
+                    emoji = self.bot.get_emoji(pack.emoji_id) if pack.emoji_id else ""
+                    await interaction.followup.send(
+                        f"You don't enough {currency_emoji} {currency_settings.name} to buy "
+                        f"**{emoji} {pack.name}**\n"
+                        f"Your actual balance: "
+                        f"**{currency_emoji} {instance.amount:,} {currency_settings.display_name(instance.amount)}**"
+                    )
+                    return
+
+                instance.amount -= pack.prize
+                await instance.asave(update_fields=("amount",))
 
     @app_commands.command()
     @app_commands.checks.cooldown(1, 86400, key=lambda i: i.user.id)

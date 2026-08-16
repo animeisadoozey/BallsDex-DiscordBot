@@ -70,6 +70,10 @@ class Pack(commands.GroupCog):
 
         if resource.daily_cooldown is not None:
             await resource.remove_daily_cooldown()
+        resource.daily_uses += 1
+        if resource.daily_uses >= 3:
+            await resource.set_daily_cooldown()
+        await resource.asave(update_fields=("daily_uses",))
         await interaction.response.defer()
         balls = [
             x
@@ -105,11 +109,6 @@ class Pack(commands.GroupCog):
             await interaction.followup.send(embed=embed, file=file)
         except OSError:
             await interaction.followup.send(embed=embed)
-        else:
-            resource.daily_uses += 1
-            if resource.daily_uses >= 3:
-                await resource.set_daily_cooldown()
-            await resource.asave(update_fields=("daily_uses",))
 
     @app_commands.command(name="weekly")
     async def weekly(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -133,6 +132,9 @@ class Pack(commands.GroupCog):
 
         if resource.weekly_cooldown is not None:
             await resource.remove_weekly_cooldown()
+        resource.weekly_uses += 1
+        await resource.set_weekly_cooldown()
+        await resource.asave(update_fields=("weekly_uses",))
         await interaction.response.defer()
         balls = [
             x
@@ -163,10 +165,6 @@ class Pack(commands.GroupCog):
             await interaction.followup.send(embed=embed, file=file)
         except OSError:
             await interaction.followup.send(embed=embed)
-        else:
-            resource.weekly_uses += 1
-            await resource.set_weekly_cooldown()
-            await resource.asave(update_fields=("weekly_uses",))
 
     @app_commands.command()
     async def shop(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -214,6 +212,9 @@ class Pack(commands.GroupCog):
                 )
                 return
 
+            money_instance.amount -= pack.prize
+            await money_instance.asave(update_fields=("amount",))
+
         balls = [x async for x in pack.balls.all()]
         if balls:
             ball = random.choice([x.cached_ball for x in balls])
@@ -249,10 +250,6 @@ class Pack(commands.GroupCog):
         except OSError:
             await interaction.followup.send(embed=embed)
             return
-        else:
-            if pack.prize:
-                money_instance.amount -= pack.prize
-                await instance.asave(update_fields=("amount",))
 
     @app_commands.command()
     @app_commands.checks.cooldown(1, 86400, key=lambda i: i.user.id)

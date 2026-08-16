@@ -200,6 +200,20 @@ class Pack(commands.GroupCog):
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         currency_emoji = self.bot.get_emoji(currency_settings.emoji_id) if currency_settings.emoji_id else ""
 
+        money_instance, _ = await MoneyInstance.objects.aget_or_create(player=player)
+
+        if pack.prize:
+            if money_instance.amount < pack.prize:
+                emoji = self.bot.get_emoji(pack.emoji_id) if pack.emoji_id else ""
+                await interaction.followup.send(
+                    f"You don't enough {currency_emoji} {currency_settings.name} to buy "
+                    f"**{emoji} {pack.name}**\n"
+                    f"Your actual balance: "
+                    f"**{currency_emoji} {money_instance.amount:,} "
+                    f"{currency_settings.display_name(money_instance.amount)}**"
+                )
+                return
+
         balls = [x async for x in pack.balls.all()]
         if balls:
             ball = random.choice([x.cached_ball for x in balls])
@@ -236,20 +250,8 @@ class Pack(commands.GroupCog):
             await interaction.followup.send(embed=embed)
             return
         else:
-            instance, _ = await MoneyInstance.objects.aget_or_create(player=player)
-
             if pack.prize:
-                if instance.amount < pack.prize:
-                    emoji = self.bot.get_emoji(pack.emoji_id) if pack.emoji_id else ""
-                    await interaction.followup.send(
-                        f"You don't enough {currency_emoji} {currency_settings.name} to buy "
-                        f"**{emoji} {pack.name}**\n"
-                        f"Your actual balance: "
-                        f"**{currency_emoji} {instance.amount:,} {currency_settings.display_name(instance.amount)}**"
-                    )
-                    return
-
-                instance.amount -= pack.prize
+                money_instance.amount -= pack.prize
                 await instance.asave(update_fields=("amount",))
 
     @app_commands.command()

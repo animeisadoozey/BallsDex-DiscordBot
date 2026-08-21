@@ -68,13 +68,23 @@ class BossGameType(IntEnum):
 
 
 class BossGame:
-    def __init__(self, guild_id: int, boss: BossBall, type: BossGameType, health: int, attack: int, buffs: bool = True):
+    def __init__(
+        self,
+        guild_id: int,
+        boss: BossBall,
+        type: BossGameType,
+        health: int,
+        attack: int,
+        round_start_cooldown: int = 30,
+        buffs: bool = True,
+    ):
         self.guild_id = guild_id
         self.boss = boss
         self.type = type
         self.health = health
         self.attack = attack
         self.buffs = buffs
+        self.round_start_cooldown = round_start_cooldown
         self.task: asyncio.Task | None = None
         self.players: dict[int, BossGamePlayer] = {}
         self.view: "JoinGameView"
@@ -118,12 +128,14 @@ class BossGame:
                     "attack" if self.type == BossGameType.last_man_standing else random.choice(["attack", "defense"])
                 )
 
-                end_time = datetime.datetime.now() + datetime.timedelta(seconds=30)
+                end_time = datetime.datetime.now() + datetime.timedelta(seconds=self.round_start_cooldown)
                 if action == "attack":
                     await channel.send(
                         content=(
                             f"# Round #{round}\n"
                             f"{self.boss.cached_ball.country} is preparing to attack!\n"
+                            f"Renember, you need to select a new {settings.collectible_name} "
+                            "every round or you'll be eliminated (To select one, use `/boss select`)\n"
                             f"-# Round will start {format_dt(end_time, 'R')}"
                         ),
                         file=self.get_boss_image("attack"),
@@ -133,11 +145,13 @@ class BossGame:
                         content=(
                             f"# Round #{round}\n"
                             f"{self.boss.cached_ball.country} is preparing to defend!\n"
+                            f"Renember, you need to select a new {settings.collectible_name} "
+                            "every round or you'll be eliminated (To select one, use `/boss select`)\n"
                             f"-# Round will start {format_dt(end_time, 'R')}"
                         ),
                         file=self.get_boss_image("defense"),
                     )
-                await asyncio.sleep(30)
+                await asyncio.sleep(self.round_start_cooldown)
                 self.pick_time = False
 
                 if action == "defense":

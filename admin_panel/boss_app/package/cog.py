@@ -86,6 +86,7 @@ class Boss(commands.GroupCog):
         health: int,
         attack: int,
         time_join: int,
+        round_start_cooldown: int = 30,
         buffs: bool = True,
     ):
         """
@@ -103,6 +104,8 @@ class Boss(commands.GroupCog):
             Initial attack of the boss
         time_join: int
             Time (in seconds) allowed to join the boss game.
+        round_start_cooldown: int
+            Time (in seconds) to wait before starting a round
         buffs: bool
             Whether or not you want to allow buffs in the boss.
         """
@@ -129,7 +132,7 @@ class Boss(commands.GroupCog):
             return
 
         settings = await self.load_boss_settings()
-        boss_game = BossGame(guild.id, boss, type, health, attack, buffs)
+        boss_game = BossGame(guild.id, boss, type, health, attack, round_start_cooldown, buffs)
         duration = timedelta(seconds=time_join)
         end_time = datetime.now() + duration
 

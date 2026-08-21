@@ -236,22 +236,23 @@ class BossGame:
                 self.pick_time = True
                 round += 1
 
+            players = self.get_players()
             if self.type == BossGameType.last_hit:
                 winner = last_player_hit
             elif self.type == BossGameType.most_damage:
-                if self.players:
-                    winner = max(self.get_players(), key=lambda p: p.damage)
+                if len(players) > 0:
+                    winner = max(players, key=lambda p: p.damage)
                 else:
                     winner = None
             elif self.type == BossGameType.least_damage:
-                if self.players:
-                    winner = min(self.get_players(), key=lambda p: p.damage)
+                if len(players) > 0:
+                    winner = min(players, key=lambda p: p.damage)
                 else:
                     winner = None
             elif self.type == BossGameType.last_man_standing:
                 winner = last_man_standing
             else:
-                winner = next(iter(self.get_players())) if self.players else None
+                winner = next(iter(players)) if len(players) > 0 else None
 
             guild = self.view.original_message.guild
             assert guild

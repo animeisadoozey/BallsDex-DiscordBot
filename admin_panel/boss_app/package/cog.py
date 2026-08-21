@@ -316,6 +316,7 @@ class Boss(commands.GroupCog):
                 boss_ball.attack += buff.attack
         player.current_instance = boss_ball
         player.instances.append(boss_ball.instance)
+        player.picked = True
         await interaction.followup.send(f"{settings.collectible_name.title()} selected.", ephemeral=True)
         return
 

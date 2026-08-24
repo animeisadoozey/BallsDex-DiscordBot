@@ -104,8 +104,6 @@ class Boss(commands.GroupCog):
             Initial attack of the boss
         time_join: int
             Time (in seconds) allowed to join the boss game.
-        round_start_cooldown: int
-            Time (in seconds) to wait before starting a round
         buffs: bool
             Whether or not you want to allow buffs in the boss.
         """
@@ -163,6 +161,55 @@ class Boss(commands.GroupCog):
         self.bot.loop.create_task(view.start_game_countdown())
         return
 
+    @admin.command(name="start_round")
+    @checks.app_check(checks.is_staff())
+    async def start_round(self, interaction: discord.Interaction["BallsDexBot"], cooldown: int | None = None):
+        """
+        Starts a round of an active round.
+
+        Parameters
+        ----------
+        cooldown: int | None
+            Time (in seconds) to wait before starting a round
+        """
+        assert interaction.guild
+        if not self.exists_boss_game(interaction.guild.id):
+            await interaction.response.send_message("There isn't an active boss game in the server.", ephemeral=True)
+            return
+        game = self.active_bosses[interaction.guild.id]
+        if game.active_round:
+            await interaction.response.send_message("There's already an active round.", ephemeral=True)
+            return
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        if cooldown:
+            game.round_start_cooldown = cooldown
+        finished = await game.start_round()
+
+        if finished:
+            if not game.winner:
+                embed = discord.Embed(title="Boss Won", color=discord.Color.orange())
+                embed.description = "The boss exterminated all the players. Good luck for the next game."
+                await game.channel.send(embed=embed)
+            else:
+                await game.give_special(game.channel, game.winner)
+                member = await interaction.guild.fetch_member(game.winner.boss_player.player.discord_id)
+                embed = discord.Embed(title="Boss Defeated", color=discord.Color.orange())
+                embed.description = (
+                    f"The boss has been defeated by {member.display_name}! Congratulations to him/her!\n"
+                    f"The boss {settings.collectible_name} has been given."
+                )
+                await game.channel.send(embed=embed)
+                game.winner.won = True
+                history = await game.winner.save()
+                await history.asave()
+
+            await interaction.followup.send(f"The boss has been finished in round #{game.round}", ephemeral=True)
+            return
+        else:
+            await interaction.followup.send(f"Round #{game.round} finished.", ephemeral=True)
+            return
+
     @admin.command(name="stop")
     @checks.app_check(checks.is_staff())
     async def admin_stop(self, interaction: discord.Interaction["BallsDexBot"]):
@@ -173,10 +220,7 @@ class Boss(commands.GroupCog):
         if not self.exists_boss_game(interaction.guild_id):
             await interaction.response.send_message("There isn't an active boss game in the server.", ephemeral=True)
             return
-        game = self.active_bosses[interaction.guild_id]
         await interaction.response.send_message("Done! The boss game is finishing in a few moments...", ephemeral=True)
-        if game.task and not game.task.done():
-            await game.stop()
         self.active_bosses.pop(interaction.guild_id, None)
         await interaction.edit_original_response(content="Boss has been cancelled.")
 

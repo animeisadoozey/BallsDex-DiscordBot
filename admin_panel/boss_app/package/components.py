@@ -78,7 +78,7 @@ class JoinGameView(LayoutView):
             game = self.cog.active_bosses[self.original_message.guild.id]
             await self.original_message.edit(view=self)
             if len(game.players) > 0:
-                await game.start()
+                await game.start_round()
             else:
                 await self.original_message.reply("No one players have joined, cancelling game...")
                 self.cog.active_bosses.pop(self.original_message.guild.id, None)

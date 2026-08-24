@@ -159,7 +159,7 @@ class Boss(commands.GroupCog):
                 await message.reply(content=role.name)
             else:
                 await message.reply(content=role.mention)
-        self.bot.loop.create_task(view.start_game_countdown())
+        await interaction.response.send_message("Boss has been started.", ephemeral=True)
         return
 
     @admin.command(name="start_round")

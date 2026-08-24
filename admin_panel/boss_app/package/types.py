@@ -244,6 +244,7 @@ class BossGame:
         for player in self.players.values():
             player.picked = False
         self.pick_time = True
+        self.active_round = False
         return False
 
     def get_players(self) -> list[BossGamePlayer]:

@@ -138,6 +138,7 @@ class Boss(commands.GroupCog):
         await asyncio.sleep(1.5)
         view = JoinGameView(message, self, time_join)
         boss_game.view = view
+        boss_game.channel = view.original_message.channel
         self.active_bosses[guild.id] = boss_game
         role = guild.get_role(settings.ping_role_id or 0)
         select_mention = self.select.extras.get("mention", "`/boss select`")
@@ -163,7 +164,7 @@ class Boss(commands.GroupCog):
 
     @admin.command(name="start_round")
     @checks.app_check(checks.is_staff())
-    async def start_round(self, interaction: discord.Interaction["BallsDexBot"], cooldown: int | None = None):
+    async def admin_start_round(self, interaction: discord.Interaction["BallsDexBot"], cooldown: int | None = None):
         """
         Starts a round of an active round.
 

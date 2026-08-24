@@ -87,7 +87,7 @@ class BossGame:
         self.round_start_cooldown = round_start_cooldown
         self.players: dict[int, BossGamePlayer] = {}
         self.view: "JoinGameView"
-        self.channel = self.view.original_message.channel
+        self.channel: discord.abc.MessageableChannel
         self.pick_time: bool = True
         self.active_round: bool = False
         self.round: int = 0

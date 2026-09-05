@@ -116,7 +116,7 @@ class Pack(commands.GroupCog):
         Claim your weekly pack!
         """
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        resource, _ = await PackResource.objects.aget_or_create(player=player)
+        resource, _ = await PackResource.objects.aget_or_create(discord_id=interaction.user.id)
         if await resource.is_weekly_on_cooldown():
             await interaction.response.send_message(
                 f"You've used all weekly packs. "

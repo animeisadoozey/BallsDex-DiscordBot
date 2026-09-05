@@ -20,4 +20,4 @@ def migrate_discord_ids(apps: "Apps", schema_editor: "BaseDatabaseSchemaEditor")
 class Migration(migrations.Migration):
     dependencies = [("pack_models", "0003_packresource_discord_id")]
 
-    operations = [migrations.RunPython(migrate_discord_ids)]
+    operations = [migrations.RunPython(migrate_discord_ids, atomic=True)]

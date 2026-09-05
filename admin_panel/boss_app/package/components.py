@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -51,16 +50,6 @@ class JoinGameView(LayoutView):
         await interaction.followup.send("You've joined to the boss game! Good luck.", ephemeral=True)
         return
 
-    async def start_game_countdown(self):
-        await asyncio.sleep(self.time_join)
-
-        assert self.original_message.guild
-        if not self.cog.exists_boss_game(self.original_message.guild.id):
-            return
-        boss_game = self.cog.active_bosses[self.original_message.guild.id]
-        if len(boss_game.players) > 0:
-            await self.on_timeout()
-
     async def on_timeout(self):
         self.stop()
         for item in self.walk_children():
@@ -77,9 +66,7 @@ class JoinGameView(LayoutView):
             assert self.original_message.guild
             game = self.cog.active_bosses[self.original_message.guild.id]
             await self.original_message.edit(view=self)
-            if len(game.players) > 0:
-                await game.start()
-            else:
+            if len(game.players) < 0:
                 await self.original_message.reply("No one players have joined, cancelling game...")
                 self.cog.active_bosses.pop(self.original_message.guild.id, None)
         except Exception:

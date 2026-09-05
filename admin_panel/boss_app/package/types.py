@@ -85,10 +85,13 @@ class BossGame:
         self.attack = attack
         self.buffs = buffs
         self.round_start_cooldown = round_start_cooldown
-        self.task: asyncio.Task | None = None
         self.players: dict[int, BossGamePlayer] = {}
         self.view: "JoinGameView"
+        self.channel: discord.abc.MessageableChannel
         self.pick_time: bool = True
+        self.active_round: bool = False
+        self.round: int = 0
+        self.winner: BossGamePlayer | None = None
 
     def get_boss_image(self, type: Literal["start", "attack", "defense"]) -> discord.File:
         image: str
@@ -117,189 +120,132 @@ class BossGame:
     def get_player(self, discord_id: int) -> BossGamePlayer | None:
         return self.players.get(discord_id, None)
 
-    async def _start(self):
-        channel = self.view.original_message.channel
-        last_player_hit: BossGamePlayer | None = None
-        last_man_standing: BossGamePlayer | None = None
-        round = 1
-        try:
-            while True:
-                action = (
-                    "attack" if self.type == BossGameType.last_man_standing else random.choice(["attack", "defense"])
+    async def start_round(self) -> bool:
+        if self.health <= 0 or self.active_round:
+            return True
+
+        self.active_round = True
+        self.round += 1
+        action = "attack" if self.type == BossGameType.last_man_standing else random.choice(["attack", "defense"])
+
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=self.round_start_cooldown)
+        if action == "attack":
+            await self.channel.send(
+                content=(
+                    f"# Round #{self.round}\n"
+                    f"{self.boss.cached_ball.country} is preparing to attack!\n"
+                    f"Renember, you need to select a new {settings.collectible_name} "
+                    "every round or you'll be eliminated (To select one, use `/boss select`)\n"
+                    f"-# Round will start {format_dt(end_time, 'R')}"
+                ),
+                file=self.get_boss_image("attack"),
+            )
+        else:
+            await self.channel.send(
+                content=(
+                    f"# Round #{self.round}\n"
+                    f"{self.boss.cached_ball.country} is preparing to defend!\n"
+                    f"Renember, you need to select a new {settings.collectible_name} "
+                    "every round or you'll be eliminated (To select one, use `/boss select`)\n"
+                    f"-# Round will start {format_dt(end_time, 'R')}"
+                ),
+                file=self.get_boss_image("defense"),
+            )
+
+        await asyncio.sleep(self.round_start_cooldown)
+        self.pick_time = False
+
+        if action == "defense":
+            global_damage_count = 0
+            log_info = ""
+            histories: list[BossHistory] = []
+            for player in self.get_players():
+                instance = player.current_instance
+                if not instance or not player.picked:
+                    player.dead = True
+                    histories.append(await player.save())
+                    log_info += (
+                        f"{player.boss_player.name} has died because "
+                        f"doesn't select an {settings.collectible_name} at time.\n"
+                    )
+                    continue
+
+                damage = min(self.health, random.randint(instance.attack // 2, instance.attack))
+                self.health -= damage
+                player.damage += damage
+                global_damage_count += damage
+
+                description = instance.instance.description(short=True)
+                log_info += f"{player.boss_player.name}'s {description} has attacked and inflicted {damage} damage.\n"
+
+                if self.health <= 0:
+                    if self.type == BossGameType.last_hit:
+                        self.winner = player
+                    elif self.type == BossGameType.most_damage:
+                        self.winner = max(self.get_players(), key=lambda p: p.damage)
+                    elif self.type == BossGameType.least_damage:
+                        self.winner = min(self.get_players(), key=lambda p: p.damage)
+                    return True
+
+            await BossHistory.objects.abulk_create(histories)
+            await self.channel.send(
+                "-# Use `/boss ongoing` to check your stats in the boss.\n"
+                f"You have attacked the boss for {global_damage_count} damage!\n"
+                f"{self.boss.cached_ball.country} has **{self.health}** health.",
+                file=text_to_file(log_info, "defense.txt"),
+            )
+        else:
+            dead_players: list[BossHistory] = []
+            global_deads = ""
+            for boss_player in self.get_players():
+                instance = boss_player.current_instance
+                if not instance or not boss_player.picked:
+                    boss_player.dead = True
+                    dead_players.append(await boss_player.save())
+                    global_deads += (
+                        f"{boss_player.boss_player.name} has died because "
+                        f"doesn't select an {settings.collectible_name} at time.\n"
+                    )
+                    continue
+
+                damage = random.randint(self.attack // 2, self.attack)
+                final_damage = min(damage, instance.health)
+                if instance.health <= damage:
+                    boss_player.dead = True
+                    dead_players.append(await boss_player.save())
+                    global_deads += f"{boss_player.boss_player.name} has died!\n"
+                    continue
+                global_deads += f"{boss_player.boss_player.name} survived, the boss inflicted {final_damage} damage.\n"
+
+            await BossHistory.objects.abulk_create(dead_players)
+
+            dead_players_count = len(dead_players)
+            if dead_players_count > 0:
+                grammar = "person has" if dead_players_count == 1 else "people have"
+                await self.channel.send(
+                    f"{dead_players_count} {grammar} died!\n"
+                    f"{self.boss.cached_ball.country} has **{self.health}** health.",
+                    file=text_to_file(global_deads, "attack.txt"),
+                )
+            else:
+                await self.channel.send(
+                    f"No one died.\n{self.boss.cached_ball.country} has **{self.health}** health.",
+                    file=text_to_file(global_deads, "attack.txt"),
                 )
 
-                end_time = datetime.datetime.now() + datetime.timedelta(seconds=self.round_start_cooldown)
-                if action == "attack":
-                    await channel.send(
-                        content=(
-                            f"# Round #{round}\n"
-                            f"{self.boss.cached_ball.country} is preparing to attack!\n"
-                            f"Renember, you need to select a new {settings.collectible_name} "
-                            "every round or you'll be eliminated (To select one, use `/boss select`)\n"
-                            f"-# Round will start {format_dt(end_time, 'R')}"
-                        ),
-                        file=self.get_boss_image("attack"),
-                    )
-                else:
-                    await channel.send(
-                        content=(
-                            f"# Round #{round}\n"
-                            f"{self.boss.cached_ball.country} is preparing to defend!\n"
-                            f"Renember, you need to select a new {settings.collectible_name} "
-                            "every round or you'll be eliminated (To select one, use `/boss select`)\n"
-                            f"-# Round will start {format_dt(end_time, 'R')}"
-                        ),
-                        file=self.get_boss_image("defense"),
-                    )
-                await asyncio.sleep(self.round_start_cooldown)
-                self.pick_time = False
+        players = self.get_players()
+        if len(players) <= 0:
+            return True
 
-                if action == "defense":
-                    global_damage_count = 0
-                    log_info = ""
-                    histories: list[BossHistory] = []
-                    for player in self.get_players():
-                        instance = player.current_instance
-                        if not instance or not player.picked:
-                            player.dead = True
-                            histories.append(await player.save())
-                            log_info += (
-                                f"{player.boss_player.name} has died because "
-                                f"doesn't select an {settings.collectible_name} at time.\n"
-                            )
-                            continue
+        if self.type == BossGameType.last_man_standing and len(players) == 1:
+            self.winner = next(iter(players))
+            return True
 
-                        damage = min(self.health, random.randint(instance.attack // 2, instance.attack))
-                        self.health -= damage
-                        player.damage += damage
-                        global_damage_count += damage
-
-                        description = instance.instance.description(short=True)
-                        log_info += (
-                            f"{player.boss_player.name}'s {description} has attacked and inflicted {damage} damage.\n"
-                        )
-
-                        if self.health <= 0:
-                            last_player_hit = player
-                            break
-
-                    await BossHistory.objects.abulk_create(histories)
-                    await channel.send(
-                        "-# Use `/boss ongoing` to check your stats in the boss.\n"
-                        f"You have attacked the boss for {global_damage_count} damage!\n"
-                        f"{self.boss.cached_ball.country} has **{self.health}** health.",
-                        file=text_to_file(log_info, "defense.txt"),
-                    )
-
-                    if self.health <= 0:
-                        await asyncio.sleep(5)
-                        break
-                else:
-                    dead_players: list[BossHistory] = []
-                    global_deads = ""
-                    for boss_player in self.get_players():
-                        instance = boss_player.current_instance
-                        if not instance or not boss_player.picked:
-                            boss_player.dead = True
-                            dead_players.append(await boss_player.save())
-                            global_deads += (
-                                f"{boss_player.boss_player.name} has died because "
-                                f"doesn't select an {settings.collectible_name} at time.\n"
-                            )
-                            continue
-
-                        damage = random.randint(self.attack // 2, self.attack)
-                        final_damage = min(damage, instance.health)
-                        if instance.health <= damage:
-                            boss_player.dead = True
-                            dead_players.append(await boss_player.save())
-                            global_deads += f"{boss_player.boss_player.name} has died!\n"
-                            continue
-                        global_deads += (
-                            f"{boss_player.boss_player.name} survived, the boss inflicted {final_damage} damage.\n"
-                        )
-
-                    await BossHistory.objects.abulk_create(dead_players)
-
-                    dead_players_count = len(dead_players)
-                    if dead_players_count > 0:
-                        grammar = "person has" if dead_players_count == 1 else "people have"
-                        await channel.send(
-                            f"{dead_players_count} {grammar} died!\n"
-                            f"{self.boss.cached_ball.country} has **{self.health}** health.",
-                            file=text_to_file(global_deads, "attack.txt"),
-                        )
-                    else:
-                        await channel.send(
-                            f"No one died.\n{self.boss.cached_ball.country} has **{self.health}** health.",
-                            file=text_to_file(global_deads, "attack.txt"),
-                        )
-
-                    players = self.get_players()
-                    if len(players) <= 0:
-                        await asyncio.sleep(5)
-                        break
-                    elif self.type == BossGameType.last_man_standing and len(players) == 1:
-                        last_man_standing = next(iter(players))
-                        await asyncio.sleep(5)
-                        break
-
-                for player in self.players.values():
-                    player.picked = False
-                await asyncio.sleep(5)
-                self.pick_time = True
-                round += 1
-
-            players = self.get_players()
-            if self.type == BossGameType.last_hit:
-                winner = last_player_hit
-            elif self.type == BossGameType.most_damage:
-                if len(players) > 0:
-                    winner = max(players, key=lambda p: p.damage)
-                else:
-                    winner = None
-            elif self.type == BossGameType.least_damage:
-                if len(players) > 0:
-                    winner = min(players, key=lambda p: p.damage)
-                else:
-                    winner = None
-            elif self.type == BossGameType.last_man_standing:
-                winner = last_man_standing
-            else:
-                winner = next(iter(players)) if len(players) > 0 else None
-
-            guild = self.view.original_message.guild
-            assert guild
-            if winner:
-                await self.give_special(channel, winner)
-                member = await guild.fetch_member(winner.boss_player.player.discord_id)
-                embed = discord.Embed(title="Boss Defeated", color=discord.Color.orange())
-                embed.description = (
-                    f"The boss has been defeated by {member.display_name}! Congratulations to him/her!\n"
-                    f"The boss {settings.collectible_name} has been given."
-                )
-                await channel.send(embed=embed)
-                winner.won = True
-                history = await winner.save()
-                await history.asave()
-            else:
-                embed = discord.Embed(title="Boss Won", color=discord.Color.orange())
-                embed.description = "The boss exterminated all the players. Good luck for the next game."
-                await channel.send(embed=embed)
-        except asyncio.CancelledError:
-            await channel.send("The boss game has been cancelled.")
-            return
-        except Exception:
-            log.exception("Failed when boss game runs")
-            await channel.send("Failed to continue the game, cancelling...")
-            await self.stop()
-            return
-        finally:
-            guild = self.view.original_message.guild
-            assert guild
-            self.view.cog.active_bosses.pop(guild.id, None)
-        if self.task and not self.task.cancelled():
-            self.task.cancel()
+        for player in self.players.values():
+            player.picked = False
+        self.pick_time = True
+        self.active_round = False
+        return False
 
     def get_players(self) -> list[BossGamePlayer]:
         return list(filter(lambda x: not x.dead, self.players.values()))
@@ -342,24 +288,3 @@ class BossGame:
                     f"to {user.mention}"
                 )
                 return
-
-    async def start(self):
-        """
-        Starts the boss game.
-        """
-        if self.task is not None:
-            raise RuntimeError("There's already an ongoing boss game.")
-
-        self.task = self.view.cog.bot.loop.create_task(self._start())
-
-    async def stop(self):
-        if self.task is None:
-            return
-        self.task.cancel()
-        try:
-            await self.task
-        except asyncio.CancelledError:
-            pass
-        guild = self.view.original_message.guild
-        assert guild
-        self.view.cog.active_bosses.pop(guild.id, None)

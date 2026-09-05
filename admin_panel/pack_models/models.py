@@ -5,11 +5,9 @@ from django.db import models
 from django.db.models import F, Q
 from django.utils import timezone
 
-from bd_models.models import Player
-
 
 class PackResource(models.Model):
-    player = models.OneToOneField(Player, on_delete=models.CASCADE, related_name="pack_resource")
+    discord_id = models.BigIntegerField(unique=True, help_text="Discord user ID")
     daily_uses = models.PositiveIntegerField(default=0)
     weekly_uses = models.PositiveIntegerField(default=0)
     daily_cooldown = models.DateTimeField(null=True, blank=True)

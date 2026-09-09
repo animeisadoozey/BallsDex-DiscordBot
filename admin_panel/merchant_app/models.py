@@ -109,3 +109,19 @@ class GlobalShop(models.Model):
     class Meta:
         managed = True
         db_table = "globalshop"
+
+
+class TokenConversion(models.Model):
+    ball = models.OneToOneField(Ball, on_delete=models.CASCADE, help_text="The ball to be used as a token.")
+    ball_id: int
+    conversion_rate = models.PositiveIntegerField(
+        help_text="Coins received for each token converted when using /merchant convert_token"
+    )
+
+    @property
+    def cached_ball(self):
+        return balls.get(self.ball_id) or self.ball
+
+    class Meta:
+        managed = True
+        db_table = "tokenconversion"

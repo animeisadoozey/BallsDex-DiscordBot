@@ -16,20 +16,12 @@ from settings.models import settings
 
 from ..models import GlobalShop, MerchantInstance, MerchantItem, MerchantSettings, global_shops, merchant_items
 from .components import BuyItemView
-from .transformers import GlobalShopTransform
+from .transformers import GlobalShopTransform, TokenConversionTransform
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
 
 log = logging.getLogger(__name__)
-
-# SETTINGS
-# for /merchant convert_token, set the name of a ball to use as a token
-token_ball_name = "Pengu"
-
-# Coins received for each token converted when using /merchant convert_token
-# Example: 1 token = 100 coins
-token_conversion_rate = 3000
 
 
 class Merchant(commands.GroupCog):
@@ -227,35 +219,27 @@ class Merchant(commands.GroupCog):
         await paginator.start(ephemeral=True)
 
     @app_commands.command()
-    async def convert_token(self, interaction: discord.Interaction["BallsDexBot"], amount: int = 1):
+    async def convert_token(
+        self, interaction: discord.Interaction["BallsDexBot"], token: TokenConversionTransform, amount: int = 1
+    ):
         """
         Convert a token into coins.
 
         Parameters
         ----------
+        token: TokenConversion
+            The token to convert.
         amount: int
             Number of tokens to convert.
         """
-        if not token_ball_name:
-            await interaction.response.send_message("This command isn't configured yet.", ephemeral=True)
-            return
         if amount <= 0:
             await interaction.response.send_message("Please select a valid amount.", ephemeral=True)
-            return
-
-        try:
-            token_ball = await Ball.objects.aget(country=token_ball_name)
-        except Ball.DoesNotExist:
-            log.exception(f"{token_ball_name} doesn't exist as a ball.")
-            await interaction.response.send_message(
-                f"An error occurred while trying to fetch token {settings.collectible_name}.", ephemeral=True
-            )
             return
 
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
-        query = BallInstance.objects.filter(player=player, special_id__isnull=True, ball_id=token_ball.pk)
+        query = BallInstance.objects.filter(player=player, special_id__isnull=True, ball_id=token.cached_ball.pk)
         if (count := await query.acount()) < amount:
             await interaction.followup.send(
                 f"You can't convert **{amount} tokens** because you don't have that amount.\n"
@@ -273,7 +257,7 @@ class Merchant(commands.GroupCog):
         )
         await interaction.followup.send(
             f"Are you sure you want to convert **{amount} {grammar}** into "
-            f"**{await self.format_price(token_conversion_rate * amount)}**?",
+            f"**{await self.format_price(token.conversion_rate * amount)}**?",
             view=view,
             ephemeral=True,
         )
@@ -285,16 +269,16 @@ class Merchant(commands.GroupCog):
         await BallInstance.objects.filter(id__in=ids).aupdate(deleted=True)
 
         money_instance, created = await MoneyInstance.objects.aget_or_create(
-            player=player, defaults={"amount": token_conversion_rate * amount}
+            player=player, defaults={"amount": token.conversion_rate * amount}
         )
         if not created:
-            money_instance.amount += token_conversion_rate * amount
+            money_instance.amount += token.conversion_rate * amount
             await money_instance.asave(update_fields=("amount",))
 
         await interaction.followup.send(
             f"Converted! All tokens successfully converted into {currency_settings.plural_name}.\n"
             f"Converted tokens: **{amount}**\n"
-            f"Given amount: **{await self.format_price(token_conversion_rate * amount)}**\n"
+            f"Given amount: **{await self.format_price(token.conversion_rate * amount)}**\n"
             f"Actual balance: **{await self.format_price(money_instance.amount)}**",
             ephemeral=True,
         )

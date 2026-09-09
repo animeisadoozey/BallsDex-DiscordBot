@@ -4,7 +4,7 @@ from discord import app_commands
 
 from ballsdex.core.utils.transformers import TTLModelTransformer
 
-from ..models import GlobalShop, global_shops
+from ..models import GlobalShop, TokenConversion, global_shops
 
 
 class GlobalShopTransformer(TTLModelTransformer):
@@ -18,4 +18,13 @@ class GlobalShopTransformer(TTLModelTransformer):
         return await self.get_queryset().prefetch_related("items").aget(pk=value)
 
 
+class TokenConversionTransformer(TTLModelTransformer[TokenConversion]):
+    name = "token"
+    model = TokenConversion
+
+    def key(self, model: TokenConversion):
+        return f"{model.cached_ball.country} (${model.conversion_rate:,} per token)"
+
+
 GlobalShopTransform = app_commands.Transform[GlobalShop, GlobalShopTransformer]
+TokenConversionTransform = app_commands.Transform[TokenConversion, TokenConversionTransformer]

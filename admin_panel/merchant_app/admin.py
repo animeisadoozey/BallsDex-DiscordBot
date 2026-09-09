@@ -3,10 +3,11 @@ from typing import TYPE_CHECKING
 from django.contrib import admin
 from django.http import HttpRequest
 
-from .models import GlobalShop, MerchantSettings, MerchantItem
+from .models import GlobalShop, MerchantItem, MerchantSettings, TokenConversion
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
+
 
 @admin.register(MerchantSettings)
 class MerchantSettingsAdmin(admin.ModelAdmin):
@@ -32,7 +33,7 @@ class MerchantItemAdmin(admin.ModelAdmin):
                 "at the specified time.",
             },
         ),
-        ("Rewards", {"fields": ["ball", "special"]})
+        ("Rewards", {"fields": ["ball", "special"]}),
     ]
 
     list_display = ("name", "prize", "rarity", "ball_name", "special_name")
@@ -63,3 +64,8 @@ class GlobalShopAdmin(admin.ModelAdmin):
 
     def get_queryset(self, request: "HttpRequest") -> "QuerySet[GlobalShop]":
         return super().get_queryset(request).prefetch_related("items")
+
+
+@admin.register(TokenConversion)
+class TokenConversionAdmin(admin.ModelAdmin):
+    pass

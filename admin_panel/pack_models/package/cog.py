@@ -53,17 +53,19 @@ class Pack(commands.GroupCog):
         """
         Claim your daily pack! (3 uses)
         """
+        await interaction.response.defer(thinking=True)
+
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         resource, _ = await PackResource.objects.aget_or_create(discord_id=interaction.user.id)
         if await resource.is_daily_on_cooldown():
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"You've used all daily packs. "
                 f"Come back {format_dt(resource.daily_cooldown + timedelta(days=1), style='R')}!",  # type: ignore
                 ephemeral=True,
             )
             return
         if self.settings.min_rarity_daily is None or self.settings.max_rarity_daily is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Daily packs are not configured. Contact support if this persists.", ephemeral=True
             )
             return
@@ -74,7 +76,6 @@ class Pack(commands.GroupCog):
         if resource.daily_uses >= 3:
             await resource.set_daily_cooldown()
         await resource.asave(update_fields=("daily_uses",))
-        await interaction.response.defer()
         balls = [
             x
             async for x in Ball.objects.filter(
@@ -115,17 +116,19 @@ class Pack(commands.GroupCog):
         """
         Claim your weekly pack!
         """
+        await interaction.response.defer(thinking=True)
+
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         resource, _ = await PackResource.objects.aget_or_create(discord_id=interaction.user.id)
         if await resource.is_weekly_on_cooldown():
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"You've used all weekly packs. "
                 f"Come back {format_dt(resource.weekly_cooldown + timedelta(days=7), style='R')}!",  # type: ignore
                 ephemeral=True,
             )
             return
         if self.settings.min_rarity_weekly is None or self.settings.max_rarity_weekly is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 "Weekly packs are not configured. Contact support if this persists.", ephemeral=True
             )
             return
@@ -135,7 +138,6 @@ class Pack(commands.GroupCog):
         resource.weekly_uses += 1
         await resource.set_weekly_cooldown()
         await resource.asave(update_fields=("weekly_uses",))
-        await interaction.response.defer()
         balls = [
             x
             async for x in Ball.objects.filter(

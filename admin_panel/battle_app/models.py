@@ -33,7 +33,9 @@ class BattleBuff(models.Model):
         if has_ball and has_special:
             raise ValidationError("You cannot set both a ball and a special.")
 
-        return super().save(force_insert, force_update, using, update_fields)
+        return super().save(
+            force_insert=force_insert, force_update=force_update, using=using, update_fields=update_fields
+        )
 
     class Meta:
         db_table = "battlebuff"

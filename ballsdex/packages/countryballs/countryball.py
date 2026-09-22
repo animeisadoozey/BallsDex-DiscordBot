@@ -159,7 +159,8 @@ class BallSpawnView(View):
     async def hint_button(self, interaction: discord.Interaction["BallsDexBot"], button: Button):
         await interaction.response.send_message(
             f"This {settings.collectible_name}'s name is **{self.name}**!\n\n"
-            f"For **Giveaways**, **Spawn Parties** and **Extra Content**, join: {settings.discord_invite}"
+            f"For **Giveaways**, **Spawn Parties** and **Extra Content**, join: {settings.discord_invite}",
+            ephemeral=True,
         )
 
     @classmethod

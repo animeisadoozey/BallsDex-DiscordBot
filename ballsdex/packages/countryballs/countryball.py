@@ -133,6 +133,7 @@ class BallSpawnView(View):
 
     async def on_timeout(self):
         self.catch_button.disabled = True
+        self.hint_button.disabled = True
         if self.message:
             try:
                 await self.message.edit(view=self)
@@ -141,7 +142,7 @@ class BallSpawnView(View):
         if self.ballinstance and not self.caught:
             await self.ballinstance.unlock()
 
-    @button(style=discord.ButtonStyle.primary, label="Catch me!")
+    @button(style=discord.ButtonStyle.green, label="Catch me!")
     async def catch_button(self, interaction: discord.Interaction["BallsDexBot"], button: Button):
         if self.caught:
             slow_message = settings.get_formatted_message(
@@ -153,6 +154,13 @@ class BallSpawnView(View):
             await interaction.response.send_message(slow_message, ephemeral=True)
         else:
             await interaction.response.send_modal(CountryballNamePrompt(self))
+
+    @button(style=discord.ButtonStyle.blurple, label="Hint")
+    async def hint_button(self, interaction: discord.Interaction["BallsDexBot"], button: Button):
+        await interaction.response.send_message(
+            f"This {settings.collectible_name}'s name is **{self.name}**!\n\n"
+            f"For **Giveaways**, **Spawn Parties** and **Extra Content**, join: {settings.discord_invite}"
+        )
 
     @classmethod
     async def from_existing(cls, bot: "BallsDexBot", ball_instance: BallInstance):
@@ -319,6 +327,7 @@ class BallSpawnView(View):
             raise RuntimeError("This ball was already caught!")
         self.caught = True
         self.catch_button.disabled = True
+        self.hint_button.disabled = True
         caught_time = timezone.now()
         player = player or (await Player.objects.aget_or_create(discord_id=user.id))[0]
         is_new = not await BallInstance.objects.filter(player=player, ball=self.model).aexists()

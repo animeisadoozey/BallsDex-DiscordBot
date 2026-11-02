@@ -13,7 +13,6 @@ from django.db.models.signals import post_init
 from django.dispatch import receiver
 from django.forms import ValidationError
 from django.utils.functional import cached_property
-from prompt_message_app.models import BallPromptMessage
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
@@ -233,6 +232,8 @@ class Settings(models.Model):
         return {x.message: x.rarity for x in self.prompts.all() if x.category == PromptMessage.PromptType.SLOW}
 
     def get_random_message(self, category: PromptMessage.PromptType, ball: Ball | None = None):
+        from prompt_message_app.models import BallPromptMessage
+
         match category:
             case PromptMessage.PromptType.CATCH:
                 messages = self.catch_messages.copy()

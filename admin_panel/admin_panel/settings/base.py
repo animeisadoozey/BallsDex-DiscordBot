@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "currency_app",
     "merchant_app",
     "pack_models",
+    "prompt_message_app",
     "media_management",
 ]
 

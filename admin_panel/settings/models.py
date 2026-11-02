@@ -13,6 +13,7 @@ from django.db.models.signals import post_init
 from django.dispatch import receiver
 from django.forms import ValidationError
 from django.utils.functional import cached_property
+from prompt_message_app.models import BallPromptMessage
 
 if TYPE_CHECKING:
     from ballsdex.core.bot import BallsDexBot
@@ -231,29 +232,29 @@ class Settings(models.Model):
     def slow_messages(self) -> dict[str, float]:
         return {x.message: x.rarity for x in self.prompts.all() if x.category == PromptMessage.PromptType.SLOW}
 
-    def get_random_message(self, category: PromptMessage.PromptType):
+    def get_random_message(self, category: PromptMessage.PromptType, ball: Ball | None = None):
         match category:
             case PromptMessage.PromptType.CATCH:
-                return random.choices(
-                    population=list(self.catch_messages.keys()), weights=list(self.catch_messages.values()), k=1
-                )[0]
+                messages = self.catch_messages.copy()
             case PromptMessage.PromptType.WRONG:
-                return random.choices(
-                    population=list(self.wrong_messages.keys()), weights=list(self.wrong_messages.values()), k=1
-                )[0]
+                messages = self.wrong_messages.copy()
             case PromptMessage.PromptType.SPAWN:
-                return random.choices(
-                    population=list(self.spawn_messages.keys()), weights=list(self.spawn_messages.values()), k=1
-                )[0]
+                messages = self.spawn_messages.copy()
             case PromptMessage.PromptType.SLOW:
-                return random.choices(
-                    population=list(self.slow_messages.keys()), weights=list(self.slow_messages.values()), k=1
-                )[0]
+                messages = self.slow_messages.copy()
+
+        if ball is not None:
+            ball_messages = BallPromptMessage.objects.filter(ball=ball, category=category).values_list(
+                "message", "rarity"
+            )
+            messages.update(dict(ball_messages))
+
+        return random.choices(population=list(messages.keys()), weights=list(messages.values()), k=1)[0]
 
     def get_formatted_message(
         self, category: PromptMessage.PromptType, model: Ball, mention: str, bot: BallsDexBot, **kwargs: str
     ):
-        message = self.get_random_message(category)
+        message = self.get_random_message(category, model)
         try:
             return message.format(
                 user=mention,

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 import discord
+from asgiref.sync import sync_to_async
 from discord.ui import Button, TextInput, button
 from django.utils import timezone
 
@@ -46,7 +47,7 @@ class CountryballNamePrompt(Modal, title=f"Catch this {settings.collectible_name
 
         player, _ = await Player.objects.aget_or_create(discord_id=interaction.user.id)
         if self.view.caught:
-            slow_message = settings.get_formatted_message(
+            slow_message = await sync_to_async(settings.get_formatted_message)(
                 category=PromptMessage.PromptType.SLOW,
                 mention=interaction.user.mention,
                 model=self.view.model,
@@ -62,7 +63,7 @@ class CountryballNamePrompt(Modal, title=f"Catch this {settings.collectible_name
             else:
                 wrong_name = self.name.value
 
-            wrong_message = settings.get_formatted_message(
+            wrong_message = await sync_to_async(settings.get_formatted_message)(
                 category=PromptMessage.PromptType.WRONG,
                 mention=interaction.user.mention,
                 model=self.view.model,
@@ -76,9 +77,11 @@ class CountryballNamePrompt(Modal, title=f"Catch this {settings.collectible_name
 
         ball, has_caught_before = await self.view.catch_ball(interaction.user, player=player, guild=interaction.guild)
 
+        catch_message = await sync_to_async(self.view.get_catch_message)(
+            ball, has_caught_before, interaction.user.mention
+        )
         await interaction.followup.send(
-            self.view.get_catch_message(ball, has_caught_before, interaction.user.mention),
-            allowed_mentions=discord.AllowedMentions(users=player.can_be_mentioned),
+            catch_message, allowed_mentions=discord.AllowedMentions(users=player.can_be_mentioned)
         )
         await interaction.followup.edit_message(self.view.message.id, view=self.view)
 
@@ -145,7 +148,7 @@ class BallSpawnView(View):
     @button(style=discord.ButtonStyle.green, label="Catch me!")
     async def catch_button(self, interaction: discord.Interaction["BallsDexBot"], button: Button):
         if self.caught:
-            slow_message = settings.get_formatted_message(
+            slow_message = await sync_to_async(settings.get_formatted_message)(
                 category=PromptMessage.PromptType.SLOW,
                 mention=interaction.user.mention,
                 model=self.model,
@@ -250,7 +253,7 @@ class BallSpawnView(View):
         try:
             permissions = channel.permissions_for(channel.guild.me)
             if permissions.attach_files and permissions.send_messages:
-                spawn_message = settings.get_formatted_message(
+                spawn_message = await sync_to_async(settings.get_formatted_message)(
                     category=PromptMessage.PromptType.SPAWN, mention="", model=self.model, bot=self.bot
                 )
 

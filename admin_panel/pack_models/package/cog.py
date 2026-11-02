@@ -73,9 +73,9 @@ class Pack(commands.GroupCog):
         if resource.daily_cooldown is not None:
             await resource.remove_daily_cooldown()
         resource.daily_uses += 1
+        await resource.asave(update_fields=("daily_uses",))
         if resource.daily_uses >= 3:
             await resource.set_daily_cooldown()
-        await resource.asave(update_fields=("daily_uses",))
         balls = [
             x
             async for x in Ball.objects.filter(

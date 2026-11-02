@@ -7,7 +7,12 @@ from django.db.models import Count
 
 from ballsdex.core.discord import LayoutView
 from ballsdex.core.utils.menus import ChunkedListSource, ItemFormatter, Menu
-from ballsdex.core.utils.transformers import BallEnabledTransform, SpecialEnabledTransform
+from ballsdex.core.utils.transformers import (
+    BallEnabledTransform,
+    EconomyTransform,
+    RegimeTransform,
+    SpecialEnabledTransform,
+)
 from bd_models.models import BallInstance, Player
 from settings.models import settings
 
@@ -22,6 +27,8 @@ async def leaderboard(
     interaction: discord.Interaction["BallsDexBot"],
     *,
     countryball: BallEnabledTransform | None = None,
+    regime: RegimeTransform | None = None,
+    economy: EconomyTransform | None = None,
     special: SpecialEnabledTransform | None = None,
 ):
     """
@@ -41,6 +48,10 @@ async def leaderboard(
         filters["special"] = special
     if countryball:
         filters["ball"] = countryball
+    if regime:
+        filters["ball__regime"] = regime
+    if economy:
+        filters["ball__economy"] = economy
 
     query = (
         BallInstance.objects.filter(**filters)
